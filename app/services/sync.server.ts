@@ -4,8 +4,9 @@ import {
 } from "@support/shopify-connector";
 import prisma from "~/db.server";
 import { createAdminClientForShop } from "./shopify-admin.server";
+import { getSyncMaxPages } from "./sync-config.server";
 
-const MAX_PAGES = 5;
+export { getSyncMaxPages } from "./sync-config.server";
 
 export type ResourceSyncOutcome =
   | { ok: true; synced: number; message: string }
@@ -18,7 +19,11 @@ export type StoreSyncSummary = {
 };
 
 function syncErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Sync failed";
+  const raw = error instanceof Error ? error.message : "Sync failed";
+  return raw
+    .replace(/postgresql:\/\/[^\s]+/gi, "[redacted]")
+    .replace(/Bearer\s+\S+/gi, "[redacted]")
+    .slice(0, 300);
 }
 
 export async function runInitialStoreSync(
@@ -45,12 +50,13 @@ export async function runInitialStoreSync(
     };
   }
 
+  const maxPages = getSyncMaxPages();
   const productSync = new ShopifyProductSync(prisma);
   const orderSync = new ShopifyOrderSync(prisma);
 
   let products: ResourceSyncOutcome;
   try {
-    const result = await productSync.syncAll(store.id, client, MAX_PAGES);
+    const result = await productSync.syncAll(store.id, client, maxPages);
     products = {
       ok: true,
       synced: result.synced,
@@ -64,7 +70,7 @@ export async function runInitialStoreSync(
   let ordersError: string | undefined;
   try {
     let cursor: string | undefined;
-    for (let i = 0; i < MAX_PAGES; i++) {
+    for (let i = 0; i < maxPages; i++) {
       const page = await orderSync.syncPage(store.id, client, cursor);
       ordersSynced += page.synced;
       if (!page.hasMore) break;
@@ -79,12 +85,18 @@ export async function runInitialStoreSync(
     : {
         ok: true,
         synced: ordersSynced,
-        message: `Synced ${ordersSynced} orders`,
+        message: `Synced ${ordersSynced} orders (up to ${maxPages} pages)`,
       };
+
+  const productMessage = products.ok
+    ? `${products.message} (up to ${maxPages} pages)`
+    : products.error;
 
   return {
     ok: products.ok && orders.ok,
-    products,
+    products: products.ok
+      ? { ...products, message: productMessage }
+      : products,
     orders,
   };
 }
@@ -94,7 +106,11 @@ export async function runProductSyncForStore(storeId: string) {
   if (!store) return;
   const client = await createAdminClientForShop(store.shopDomain);
   if (!client) return;
-  await new ShopifyProductSync(prisma).syncAll(store.id, client, MAX_PAGES);
+  await new ShopifyProductSync(prisma).syncAll(
+    store.id,
+    client,
+    getSyncMaxPages(),
+  );
 }
 
 export async function runOrderSyncForStore(storeId: string) {
@@ -103,8 +119,9 @@ export async function runOrderSyncForStore(storeId: string) {
   const client = await createAdminClientForShop(store.shopDomain);
   if (!client) return;
   const orderSync = new ShopifyOrderSync(prisma);
+  const maxPages = getSyncMaxPages();
   let cursor: string | undefined;
-  for (let i = 0; i < MAX_PAGES; i++) {
+  for (let i = 0; i < maxPages; i++) {
     const page = await orderSync.syncPage(store.id, client, cursor);
     if (!page.hasMore) break;
     cursor = page.endCursor;

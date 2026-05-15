@@ -126,7 +126,21 @@ shopify app dev
 
 ---
 
-## 7. Smoke test checklist
+## 7. Sync limits (large stores)
+
+Initial sync pulls up to `SYNC_MAX_PAGES` GraphQL pages per resource (default **5**, max **50**).
+
+Set in `.env` if your dev store has many products/orders:
+
+```env
+SYNC_MAX_PAGES=10
+```
+
+Product sync writes one `SyncLog` row per page; Settings → **System status** shows the latest product/order log.
+
+---
+
+## 8. Smoke test checklist
 
 ### Admin
 
@@ -161,7 +175,9 @@ shopify app dev
 | CORS blocked | Dev: use `*.myshopify.com` preview; prod: set `STOREFRONT_CORS_ORIGINS` |
 | Missing scopes | Reinstall app after updating `SCOPES` / `shopify.app.toml` |
 | Order not found (but order exists) | Email must match Shopify order; try **Orders → Test lookup** in admin |
+| Too many order lookups | Wait 10 minutes — rate limits apply per IP/session/email/order |
 | Sync: no admin session | Reinstall app on the store to refresh OAuth session |
+| Large catalog, partial sync | Increase `SYNC_MAX_PAGES` and run **Sync now** again |
 
 ---
 

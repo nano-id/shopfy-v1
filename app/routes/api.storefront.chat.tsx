@@ -11,6 +11,7 @@ import {
   getStorefrontCorsHeaders,
   jsonWithCors,
 } from "~/services/cors.server";
+import { checkOrderLookupRateLimit } from "~/services/order-lookup-rate-limit.server";
 import { checkRateLimit } from "~/services/rate-limit.server";
 
 const returnReasonSchema = z.enum(
@@ -66,7 +67,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const limited = checkRateLimit(`chat:${ip}`, { max: 60, windowMs: 60_000 });
+  const limited = checkRateLimit(`chat:${ip}`, { max: 60, windowMs: 60_000 })
+    .limited;
   if (limited) {
     return jsonWithCors(
       request,
@@ -94,6 +96,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const chatRequest = toChatRequest(parsed.data);
   if (!chatRequest) {
     return jsonWithCors(request, { error: "Invalid payload" }, { status: 400 });
+  }
+
+  if (chatRequest.type === "order_lookup") {
+    const lookupLimited = checkOrderLookupRateLimit({
+      ip,
+      shopDomain: chatRequest.shopDomain,
+      sessionId: chatRequest.sessionId,
+      email: chatRequest.email,
+      orderNumber: chatRequest.orderNumber,
+    });
+    if (lookupLimited.limited) {
+      return jsonWithCors(
+        request,
+        {
+          error: "Too many requests",
+          reply: lookupLimited.message,
+        },
+        { status: 429 },
+      );
+    }
   }
 
   const response = await handleChatRequest(chatRequest);

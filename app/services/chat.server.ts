@@ -48,6 +48,8 @@ const SAFE_GENERIC =
 export async function handleChatRequest(
   req: ChatRequest,
 ): Promise<Response> {
+  let conversationId = "";
+
   try {
     const store = await prisma.store.findFirst({
       where: {
@@ -64,6 +66,7 @@ export async function handleChatRequest(
       store.id,
       req.sessionId,
     );
+    conversationId = conversation.id;
 
     if (req.type === "message") {
       return await handleMessage(store.id, conversation.id, req.content);
@@ -81,7 +84,7 @@ export async function handleChatRequest(
   } catch (error) {
     if (error instanceof OrderVerificationError) {
       return jsonOk({
-        conversationId: "",
+        conversationId,
         reply:
           error.code === "EMAIL_MISMATCH"
             ? "The email does not match this order. Please check and try again."
@@ -90,7 +93,7 @@ export async function handleChatRequest(
     }
 
     console.error("[handleChatRequest] unexpected error", error);
-    return jsonOk({ conversationId: "", reply: SAFE_GENERIC });
+    return jsonOk({ conversationId, reply: SAFE_GENERIC });
   }
 }
 
