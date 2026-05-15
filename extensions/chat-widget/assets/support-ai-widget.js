@@ -63,18 +63,43 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  function safeErrorMessage(err, fallback) {
+    if (err && typeof err.userMessage === "string" && err.userMessage) {
+      return err.userMessage;
+    }
+    if (err && typeof err.message === "string" && err.message !== "Request failed") {
+      return err.message;
+    }
+    return fallback;
+  }
+
   async function apiPost(payload) {
     if (!apiBase) {
-      throw new Error("API not configured");
+      const err = new Error("API not configured");
+      err.userMessage = "Configure App API base URL in theme block settings.";
+      throw err;
     }
     const res = await fetch(apiBase + "/api/storefront/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
     if (!res.ok) {
-      throw new Error(data.error || "Request failed");
+      const err = new Error(
+        (data && data.error) || "Request failed",
+      );
+      if (data && data.reply) {
+        err.userMessage = data.reply;
+      } else if (data && data.error) {
+        err.userMessage = data.error;
+      }
+      throw err;
     }
     return data;
   }
@@ -115,9 +140,12 @@
             email,
           });
           if (data.reply) appendMessage(data.reply, "bot");
-        } catch {
+        } catch (err) {
           appendMessage(
-            "We could not check your order right now. Please try again shortly.",
+            safeErrorMessage(
+              err,
+              "We could not check your order right now. Please try again shortly.",
+            ),
             "bot",
           );
         }
@@ -154,9 +182,12 @@
               reasonCode: opt.code,
             });
             if (data.reply) appendMessage(data.reply, "bot");
-          } catch {
+          } catch (err) {
             appendMessage(
-              "We could not save your return reason. Please try again.",
+              safeErrorMessage(
+                err,
+                "We could not save your return reason. Please try again.",
+              ),
               "bot",
             );
           }
@@ -179,8 +210,11 @@
       });
       if (data.reply) appendMessage(data.reply, "bot");
       renderActions(data.actions);
-    } catch {
-      appendMessage("Could not reach support. Try again later.", "bot");
+    } catch (err) {
+      appendMessage(
+        safeErrorMessage(err, "Could not reach support. Try again later."),
+        "bot",
+      );
     }
   }
 

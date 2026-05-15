@@ -10,6 +10,8 @@ embedded = true
 [build]
 automatically_update_urls_on_dev = true
 
+# Fulfillment tracking uses read_fulfillments (Shopify Admin API).
+# If scopes change, reinstall the app on the dev store.
 [access_scopes]
 scopes = "read_products,read_orders,read_customers,read_fulfillments"
 

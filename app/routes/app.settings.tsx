@@ -15,6 +15,8 @@ import {
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/db.server";
+import type { StoreSyncSummary } from "~/services/sync.server";
+import { getSystemStatus } from "~/services/system-status.server";
 import { requireStoreForShop } from "~/services/tenant.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -25,12 +27,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     where: { storeId: store.id },
   });
 
+  const systemStatus = await getSystemStatus(store.id, {
+    status: store.status,
+    widgetEnabled: store.widgetEnabled,
+  });
+
   return {
     store: {
       supportEmail: store.supportEmail ?? "",
       widgetEnabled: store.widgetEnabled,
     },
     policies,
+    systemStatus,
   };
 };
 
@@ -42,8 +50,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "sync") {
     const { runInitialStoreSync } = await import("~/services/sync.server");
-    await runInitialStoreSync(store.shopDomain);
-    return { ok: true, synced: true };
+    const syncResult = await runInitialStoreSync(store.shopDomain);
+    return {
+      ok: syncResult.ok,
+      synced: true,
+      syncResult,
+    };
   }
 
   await prisma.store.update({
@@ -57,21 +69,103 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return { ok: true };
 };
 
+function formatSyncLine(
+  label: string,
+  outcome: StoreSyncSummary["products"],
+): string {
+  if (outcome.ok) {
+    return `${label}: ${outcome.message}`;
+  }
+  return `${label}: failed — ${outcome.error}`;
+}
+
+function formatLastSync(
+  resource: string,
+  info: {
+    status: string;
+    message: string | null;
+    finishedAt: string | null;
+  },
+): string {
+  if (info.status === "none") {
+    return `${resource}: no sync yet`;
+  }
+  const time = info.finishedAt
+    ? new Date(info.finishedAt).toLocaleString()
+    : "in progress";
+  return `${resource}: ${info.status}${info.message ? ` — ${info.message}` : ""} (${time})`;
+}
+
 export default function SettingsPage() {
-  const { store, policies } = useLoaderData<typeof loader>();
+  const { store, policies, systemStatus } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
   return (
     <Page title="Settings">
       <Layout>
         <Layout.Section>
-          {actionData?.ok && (
+          {actionData?.ok === true && actionData.synced && actionData.syncResult && (
+            <BlockStack gap="100">
+              <Text as="p" tone="success">
+                Sync finished.
+              </Text>
+              <Text as="p" variant="bodySm">
+                {formatSyncLine("Products", actionData.syncResult.products)}
+              </Text>
+              <Text as="p" variant="bodySm">
+                {formatSyncLine("Orders", actionData.syncResult.orders)}
+              </Text>
+            </BlockStack>
+          )}
+          {actionData?.synced && actionData.ok === false && actionData.syncResult && (
+            <BlockStack gap="100">
+              <Text as="p" tone="critical">
+                Sync completed with errors.
+              </Text>
+              <Text as="p" variant="bodySm">
+                {formatSyncLine("Products", actionData.syncResult.products)}
+              </Text>
+              <Text as="p" variant="bodySm">
+                {formatSyncLine("Orders", actionData.syncResult.orders)}
+              </Text>
+            </BlockStack>
+          )}
+          {actionData?.ok && !actionData.synced && (
             <Text as="p" tone="success">
-              {actionData.synced
-                ? "Product and order sync completed."
-                : "Settings saved."}
+              Settings saved.
             </Text>
           )}
+        </Layout.Section>
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="200">
+              <Text as="h2" variant="headingMd">
+                System status
+              </Text>
+              <Text as="p" variant="bodySm">
+                Database connected:{" "}
+                {systemStatus.databaseConnected ? "yes" : "no"}
+                {!systemStatus.databaseConnected &&
+                  systemStatus.databaseMessage &&
+                  ` (${systemStatus.databaseMessage})`}
+              </Text>
+              <Text as="p" variant="bodySm">
+                Store connected: {systemStatus.storeConnected ? "yes" : "no"}
+              </Text>
+              <Text as="p" variant="bodySm">
+                Widget enabled: {systemStatus.widgetEnabled ? "yes" : "no"}
+              </Text>
+              <Text as="p" variant="bodySm">
+                {formatLastSync("Products", systemStatus.lastProductSync)}
+              </Text>
+              <Text as="p" variant="bodySm">
+                {formatLastSync("Orders", systemStatus.lastOrderSync)}
+              </Text>
+              <Text as="p" tone="subdued" variant="bodySm">
+                Public health check: GET /api/health
+              </Text>
+            </BlockStack>
+          </Card>
         </Layout.Section>
         <Layout.Section>
           <Form method="post">
