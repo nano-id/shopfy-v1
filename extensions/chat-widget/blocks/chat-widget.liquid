@@ -1,0 +1,22 @@
+<div
+  id="support-ai-chat-root"
+  data-shop="{{ shop.permanent_domain }}"
+  data-api-base="{{ block.settings.api_base_url }}"
+></div>
+
+{% schema %}
+{
+  "name": "Support AI Chat",
+  "target": "body",
+  "javascript": "support-ai-widget.js",
+  "stylesheet": "support-ai-widget.css",
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_base_url",
+      "label": "App API base URL",
+      "info": "Your deployed app URL (no trailing slash)"
+    }
+  ]
+}
+{% endschema %}

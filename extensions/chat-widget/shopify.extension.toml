@@ -1,0 +1,8 @@
+api_version = "2025-10"
+
+name = "support-ai-chat"
+type = "theme"
+handle = "support-ai-chat"
+
+[capabilities]
+network_access = true

@@ -1,0 +1,34 @@
+{
+  "include": [
+    "app/**/*",
+    "packages/**/*",
+    "extensions/**/*",
+    ".react-router/types/**/*"
+  ],
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": ["@react-router/node", "vite/client", "vitest/globals"],
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "target": "ES2022",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./app/*"],
+      "@support/core": ["./packages/core/src/index.ts"],
+      "@support/core/*": ["./packages/core/src/*"],
+      "@support/ai": ["./packages/ai/src/index.ts"],
+      "@support/ai/*": ["./packages/ai/src/*"],
+      "@support/shopify-connector": ["./packages/connectors/shopify/src/index.ts"],
+      "@support/shopify-connector/*": ["./packages/connectors/shopify/src/*"]
+    },
+    "rootDirs": [".", "./.react-router/types"]
+  }
+}

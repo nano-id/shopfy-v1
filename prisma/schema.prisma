@@ -1,0 +1,365 @@
+// Multi-tenant Shopify Support AI — normalized domain models
+// Session model required by @shopify/shopify-app-session-storage-prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Shopify OAuth session (managed by Shopify session storage adapter) ---
+
+model Session {
+  id                   String    @id
+  shop                 String
+  state                String
+  isOnline             Boolean   @default(false)
+  scope                String?
+  expires              DateTime?
+  accessToken            String
+  userId               BigInt?
+  firstName            String?
+  lastName             String?
+  email                String?
+  accountOwner         Boolean   @default(false)
+  locale               String?
+  collaborator         Boolean?  @default(false)
+  emailVerified        Boolean?  @default(false)
+  refreshToken         String?
+  refreshTokenExpires  DateTime?
+}
+
+// --- Platform & tenant ---
+
+enum Platform {
+  SHOPIFY
+  WOOCOMMERCE
+  WIX
+  BIGCOMMERCE
+}
+
+enum StoreStatus {
+  ACTIVE
+  UNINSTALLED
+  SUSPENDED
+}
+
+model Store {
+  id              String      @id @default(cuid())
+  platform        Platform    @default(SHOPIFY)
+  externalId      String // shop domain or platform shop id
+  shopDomain      String      @unique
+  name            String?
+  email           String?
+  accessToken     String? // encrypted at rest in production
+  scope           String?
+  status          StoreStatus @default(ACTIVE)
+  widgetEnabled   Boolean     @default(true)
+  supportEmail    String?
+  installedAt     DateTime    @default(now())
+  uninstalledAt   DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  products        Product[]
+  customers       Customer[]
+  orders          Order[]
+  conversations   Conversation[]
+  returnRequests  ReturnRequest[]
+  supportTickets  SupportTicket[]
+  storePolicies   StorePolicy[]
+  syncLogs        SyncLog[]
+  webhookEvents   WebhookEvent[]
+
+  @@unique([platform, externalId])
+  @@index([status])
+}
+
+// --- Catalog (normalized) ---
+
+model Product {
+  id          String    @id @default(cuid())
+  storeId     String
+  externalId  String
+  title       String
+  handle      String?
+  description String?
+  vendor      String?
+  productType String?
+  status      String?
+  syncedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  variants Variant[]
+
+  @@unique([storeId, externalId])
+  @@index([storeId])
+}
+
+model Variant {
+  id          String   @id @default(cuid())
+  storeId     String
+  productId   String
+  externalId  String
+  title       String?
+  sku         String?
+  price       String?
+  sizeLabel   String? // e.g. M, L — for return analytics
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  returnRequests ReturnRequest[]
+
+  @@unique([storeId, externalId])
+  @@index([storeId])
+  @@index([productId])
+}
+
+// --- Customers & orders ---
+
+model Customer {
+  id         String   @id @default(cuid())
+  storeId    String
+  externalId String
+  email      String?
+  firstName  String?
+  lastName   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  store  Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([storeId, externalId])
+  @@index([storeId, email])
+}
+
+model Order {
+  id            String   @id @default(cuid())
+  storeId       String
+  externalId    String
+  customerId    String?
+  name          String? // #1001
+  email         String?
+  financialStatus String?
+  fulfillmentStatus String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  syncedAt      DateTime?
+
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customer     Customer?     @relation(fields: [customerId], references: [id])
+  fulfillments Fulfillment[]
+  returnRequests ReturnRequest[]
+
+  @@unique([storeId, externalId])
+  @@index([storeId, email])
+  @@index([storeId, name])
+}
+
+model Fulfillment {
+  id              String   @id @default(cuid())
+  storeId         String
+  orderId         String
+  externalId      String
+  status          String?
+  trackingCompany String?
+  trackingNumber  String?
+  trackingUrl     String?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, externalId])
+  @@index([orderId])
+}
+
+// --- Support conversations ---
+
+enum ConversationStatus {
+  OPEN
+  RESOLVED
+  NEEDS_HUMAN
+  CLOSED
+}
+
+enum MessageRole {
+  CUSTOMER
+  BOT
+  SYSTEM
+  AGENT
+}
+
+model Conversation {
+  id           String             @id @default(cuid())
+  storeId      String
+  sessionId    String? // anonymous storefront session
+  status       ConversationStatus @default(OPEN)
+  intent       String?
+  aiHandled    Boolean            @default(false)
+  resolvedAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  tickets        SupportTicket[]
+  returnRequests ReturnRequest[]
+
+  @@index([storeId, status])
+  @@index([storeId, createdAt])
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// --- Returns ---
+
+enum ReturnReasonCode {
+  SIZE_TOO_SMALL
+  SIZE_TOO_LARGE
+  DAMAGED_ITEM
+  WRONG_ITEM
+  NOT_AS_EXPECTED
+  LATE_DELIVERY
+  CHANGED_MIND
+  OTHER
+}
+
+model ReturnRequest {
+  id             String           @id @default(cuid())
+  storeId        String
+  conversationId String?
+  orderId        String?
+  variantId      String?
+  productTitle   String?
+  variantTitle   String?
+  reasonCode     ReturnReasonCode
+  reasonNote     String?
+  customerEmail  String?
+  createdAt      DateTime         @default(now())
+
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  order        Order?        @relation(fields: [orderId], references: [id])
+  variant      Variant?      @relation(fields: [variantId], references: [id])
+
+  @@index([storeId, reasonCode])
+  @@index([storeId, createdAt])
+  @@index([variantId])
+}
+
+// --- Support tickets (human handoff) ---
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model SupportTicket {
+  id             String       @id @default(cuid())
+  storeId        String
+  conversationId String?
+  subject        String?
+  status         TicketStatus @default(OPEN)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  store        Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+
+  @@index([storeId, status])
+}
+
+// --- Store policies (for deterministic answers) ---
+
+enum PolicyType {
+  SHIPPING
+  RETURNS
+  EXCHANGES
+  SIZING
+  GENERAL
+}
+
+model StorePolicy {
+  id        String     @id @default(cuid())
+  storeId   String
+  type      PolicyType
+  title     String?
+  content   String
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, type])
+}
+
+// --- Ops & webhooks ---
+
+enum SyncResource {
+  PRODUCTS
+  ORDERS
+  FULFILLMENTS
+  CUSTOMERS
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model SyncLog {
+  id         String       @id @default(cuid())
+  storeId    String
+  resource   SyncResource
+  status     SyncStatus
+  message    String?
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, resource])
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  storeId     String?
+  topic       String
+  shopDomain  String?
+  externalId  String?
+  payload     Json
+  processed   Boolean  @default(false)
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  @@index([shopDomain, topic])
+  @@index([processed, createdAt])
+}
