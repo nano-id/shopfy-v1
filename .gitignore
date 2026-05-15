@@ -1,3 +1,6 @@
+# Tests & local-only tooling — never push
+test/
+
 node_modules/
 build/
 dist/
