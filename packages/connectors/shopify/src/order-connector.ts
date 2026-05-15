@@ -1,4 +1,4 @@
-import type { NormalizedOrder } from "@support/core";
+import type { OrderConnectorLookupResult } from "@support/core";
 import type { OrderConnector } from "@support/core";
 import { executeShopifyGraphQL } from "./graphql/client.js";
 import { ORDER_BY_NAME_AND_EMAIL } from "./graphql/queries.js";
@@ -25,11 +25,11 @@ export class ShopifyOrderConnector implements OrderConnector {
     storeId: string,
     orderNumber: string,
     email: string,
-  ): Promise<NormalizedOrder | null> {
+  ): Promise<OrderConnectorLookupResult> {
     const client = await this.deps.getAdminClient(storeId);
     if (!client) {
       console.error("[ShopifyOrderConnector] no admin client for store", storeId);
-      return null;
+      return { status: "unavailable", code: "NO_CLIENT" };
     }
 
     const query = `name:#${orderNumber} email:${email}`;
@@ -41,12 +41,21 @@ export class ShopifyOrderConnector implements OrderConnector {
 
     if (!result.ok) {
       console.error("[ShopifyOrderConnector] lookup failed", result.error);
-      return null;
+      return {
+        status: "unavailable",
+        code: result.throttled ? "THROTTLED" : "API_ERROR",
+        cause: result.error,
+      };
     }
 
     const node = result.data.orders?.edges?.[0]?.node;
-    if (!node) return null;
+    if (!node) {
+      return { status: "not_found" };
+    }
 
-    return mapShopifyOrderToNormalized(node);
+    return {
+      status: "found",
+      order: mapShopifyOrderToNormalized(node),
+    };
   }
 }

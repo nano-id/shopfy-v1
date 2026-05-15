@@ -53,9 +53,11 @@ export type OrderLookupInput = {
   email: string;
 };
 
+export type OrderLookupFailureCode = "NOT_FOUND" | "UNAVAILABLE";
+
 export type OrderLookupResult =
   | { success: true; order: NormalizedOrder; message: string }
-  | { success: false; code: string; message: string };
+  | { success: false; code: OrderLookupFailureCode; message: string };
 
 export type ReturnRequestInput = {
   reasonCode: ReturnReasonCode;

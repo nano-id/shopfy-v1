@@ -4,6 +4,12 @@ import type { OrderConnector } from "./order-connector.interface.js";
 import { OrderVerificationService } from "./order-verification.service.js";
 import { formatOrderTrackingMessage } from "./order-tracking-message.js";
 
+const ORDER_NOT_FOUND_MESSAGE =
+  "We could not find an order with that number and email. Please check your details and try again.";
+
+const ORDER_UNAVAILABLE_MESSAGE =
+  "We could not check your order right now. Please try again shortly.";
+
 export class OrderTrackingService {
   constructor(
     private readonly connector: OrderConnector,
@@ -21,20 +27,29 @@ export class OrderTrackingService {
     );
     const email = this.verification.normalizeEmail(input.email);
 
-    const order = await this.connector.findOrderByNumberAndEmail(
+    const connectorResult = await this.connector.findOrderByNumberAndEmail(
       storeId,
       orderNumber,
       email,
     );
 
-    if (!order) {
+    if (connectorResult.status === "unavailable") {
+      return {
+        success: false,
+        code: "UNAVAILABLE",
+        message: ORDER_UNAVAILABLE_MESSAGE,
+      };
+    }
+
+    if (connectorResult.status === "not_found") {
       return {
         success: false,
         code: "NOT_FOUND",
-        message:
-          "We could not find an order with that number and email. Please check your details and try again.",
+        message: ORDER_NOT_FOUND_MESSAGE,
       };
     }
+
+    const order = connectorResult.order;
 
     if (!this.verification.emailsMatch(order.email, email)) {
       throw new OrderVerificationError(

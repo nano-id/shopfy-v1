@@ -196,7 +196,7 @@ async function handleOrderLookup(
   } catch (error) {
     console.error("[chat] order lookup failed", error);
     const reply =
-      "We could not look up your order right now. Please try again in a few minutes.";
+      "We could not check your order right now. Please try again shortly.";
     await saveMessage(conversationId, "BOT", reply);
     return jsonOk({ conversationId, reply });
   }

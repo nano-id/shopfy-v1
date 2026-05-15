@@ -1,4 +1,4 @@
-import type { NormalizedOrder } from "../types/index.js";
+import type { OrderConnectorLookupResult } from "./order-lookup-result.js";
 
 /** Platform-agnostic order lookup — implemented by Shopify connector. */
 export interface OrderConnector {
@@ -6,5 +6,5 @@ export interface OrderConnector {
     storeId: string,
     orderNumber: string,
     email: string,
-  ): Promise<NormalizedOrder | null>;
+  ): Promise<OrderConnectorLookupResult>;
 }

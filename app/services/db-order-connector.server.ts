@@ -1,4 +1,8 @@
-import type { NormalizedFulfillment, NormalizedOrder } from "@support/core";
+import type {
+  NormalizedFulfillment,
+  NormalizedOrder,
+  OrderConnectorLookupResult,
+} from "@support/core";
 import type { OrderConnector } from "@support/core";
 import prisma from "~/db.server";
 
@@ -10,7 +14,7 @@ export class DbFirstOrderConnector implements OrderConnector {
     storeId: string,
     orderNumber: string,
     email: string,
-  ): Promise<NormalizedOrder | null> {
+  ): Promise<OrderConnectorLookupResult> {
     const normalizedNumber = orderNumber.trim().replace(/^#/, "");
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -31,7 +35,7 @@ export class DbFirstOrderConnector implements OrderConnector {
     );
 
     if (match) {
-      return mapDbOrder(match);
+      return { status: "found", order: mapDbOrder(match) };
     }
 
     return this.platform.findOrderByNumberAndEmail(
