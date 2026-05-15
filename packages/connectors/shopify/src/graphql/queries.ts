@@ -23,6 +23,41 @@ export const ORDER_BY_NAME_AND_EMAIL = `#graphql
   }
 `;
 
+export const ORDERS_SYNC = `#graphql
+  query OrdersSync($cursor: String) {
+    orders(first: 50, after: $cursor, sortKey: UPDATED_AT, reverse: true) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          id
+          name
+          email
+          displayFinancialStatus
+          displayFulfillmentStatus
+          customer {
+            id
+            email
+            firstName
+            lastName
+          }
+          fulfillments(first: 10) {
+            id
+            status
+            trackingInfo {
+              company
+              number
+              url
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const PRODUCTS_SYNC = `#graphql
   query ProductsSync($cursor: String) {
     products(first: 50, after: $cursor) {

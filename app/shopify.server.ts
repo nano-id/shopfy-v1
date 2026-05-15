@@ -28,8 +28,12 @@ const shopify = shopifyApp({
       await storeService.upsertOnInstall({
         shopDomain: session.shop,
         externalId: session.shop,
-        accessToken: session.accessToken,
         scope: session.scope ?? undefined,
+      });
+
+      const { runInitialStoreSync } = await import("~/services/sync.server");
+      runInitialStoreSync(session.shop).catch((err) => {
+        console.error("[afterAuth] initial sync failed", session.shop, err);
       });
     },
   },

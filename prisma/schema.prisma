@@ -54,7 +54,6 @@ model Store {
   shopDomain      String      @unique
   name            String?
   email           String?
-  accessToken     String? // encrypted at rest in production
   scope           String?
   status          StoreStatus @default(ACTIVE)
   widgetEnabled   Boolean     @default(true)

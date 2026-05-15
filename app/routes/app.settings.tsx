@@ -38,6 +38,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const store = await requireStoreForShop(session.shop);
   const form = await request.formData();
+  const intent = form.get("intent");
+
+  if (intent === "sync") {
+    const { runInitialStoreSync } = await import("~/services/sync.server");
+    await runInitialStoreSync(store.shopDomain);
+    return { ok: true, synced: true };
+  }
 
   await prisma.store.update({
     where: { id: store.id },
@@ -60,7 +67,9 @@ export default function SettingsPage() {
         <Layout.Section>
           {actionData?.ok && (
             <Text as="p" tone="success">
-              Settings saved.
+              {actionData.synced
+                ? "Product and order sync completed."
+                : "Settings saved."}
             </Text>
           )}
         </Layout.Section>
@@ -95,6 +104,23 @@ export default function SettingsPage() {
                 </Text>
                 <Button submit variant="primary">
                   Save
+                </Button>
+              </BlockStack>
+            </Card>
+          </Form>
+        </Layout.Section>
+        <Layout.Section>
+          <Form method="post">
+            <Card>
+              <BlockStack gap="300">
+                <Text as="h2" variant="headingMd">
+                  Data sync
+                </Text>
+                <Text as="p" tone="subdued">
+                  Pull products, variants, orders, and fulfillments from Shopify.
+                </Text>
+                <Button submit name="intent" value="sync">
+                  Sync now
                 </Button>
               </BlockStack>
             </Card>

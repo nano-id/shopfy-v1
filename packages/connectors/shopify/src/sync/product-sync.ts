@@ -1,18 +1,46 @@
 import type { PrismaClient } from "@prisma/client";
 import { SyncResource, SyncStatus } from "@prisma/client";
+import { executeShopifyGraphQL } from "../graphql/client.js";
 import { PRODUCTS_SYNC } from "../graphql/queries.js";
 import { mapShopifyProductToNormalized } from "../mappers/product.mapper.js";
 import type { ShopifyAdminClient } from "../types.js";
 import type { SyncResult } from "./types.js";
 
+type ProductsSyncData = {
+  products?: {
+    pageInfo?: { hasNextPage: boolean; endCursor?: string };
+    edges?: Array<{ node: Parameters<typeof mapShopifyProductToNormalized>[0] }>;
+  };
+};
+
 export class ShopifyProductSync {
   constructor(private readonly prisma: PrismaClient) {}
+
+  async syncAll(
+    storeId: string,
+    client: ShopifyAdminClient,
+    maxPages = 10,
+  ): Promise<SyncResult> {
+    let cursor: string | undefined;
+    let totalSynced = 0;
+    let pages = 0;
+
+    while (pages < maxPages) {
+      const page = await this.syncPage(storeId, client, cursor);
+      totalSynced += page.synced;
+      pages++;
+      if (!page.hasMore) break;
+      cursor = page.endCursor;
+    }
+
+    return { resource: "PRODUCTS", synced: totalSynced, hasMore: false };
+  }
 
   async syncPage(
     storeId: string,
     client: ShopifyAdminClient,
     cursor?: string,
-  ): Promise<SyncResult> {
+  ): Promise<SyncResult & { endCursor?: string }> {
     const log = await this.prisma.syncLog.create({
       data: {
         storeId,
@@ -22,19 +50,17 @@ export class ShopifyProductSync {
     });
 
     try {
-      const response = await client.graphql(PRODUCTS_SYNC, {
-        variables: { cursor: cursor ?? null },
-      });
-      const json = (await response.json()) as {
-        data?: {
-          products?: {
-            pageInfo?: { hasNextPage: boolean; endCursor?: string };
-            edges?: Array<{ node: Parameters<typeof mapShopifyProductToNormalized>[0] }>;
-          };
-        };
-      };
+      const result = await executeShopifyGraphQL<ProductsSyncData>(
+        client,
+        PRODUCTS_SYNC,
+        { cursor: cursor ?? null },
+      );
 
-      const products = json.data?.products;
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+
+      const products = result.data.products;
       let synced = 0;
 
       for (const edge of products?.edges ?? []) {
@@ -61,6 +87,9 @@ export class ShopifyProductSync {
             title: mapped.title,
             handle: mapped.handle,
             description: mapped.description,
+            vendor: mapped.vendor,
+            productType: mapped.productType,
+            status: mapped.status,
             syncedAt: new Date(),
           },
         });
@@ -92,20 +121,26 @@ export class ShopifyProductSync {
 
       await this.prisma.syncLog.update({
         where: { id: log.id },
-        data: { status: SyncStatus.SUCCESS, finishedAt: new Date() },
+        data: {
+          status: SyncStatus.SUCCESS,
+          finishedAt: new Date(),
+          message: `Synced ${synced} products`,
+        },
       });
 
       return {
         resource: "PRODUCTS",
         synced,
         hasMore: products?.pageInfo?.hasNextPage ?? false,
+        endCursor: products?.pageInfo?.endCursor,
       };
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Sync failed";
       await this.prisma.syncLog.update({
         where: { id: log.id },
         data: {
           status: SyncStatus.FAILED,
-          message: error instanceof Error ? error.message : "Sync failed",
+          message,
           finishedAt: new Date(),
         },
       });

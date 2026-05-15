@@ -6,7 +6,6 @@ export type UpsertStoreInput = {
   externalId: string;
   name?: string | null;
   email?: string | null;
-  accessToken?: string | null;
   scope?: string | null;
 };
 
@@ -22,7 +21,6 @@ export class ShopifyStoreService {
         shopDomain: input.shopDomain,
         name: input.name,
         email: input.email,
-        accessToken: input.accessToken,
         scope: input.scope,
         status: StoreStatus.ACTIVE,
         uninstalledAt: null,
@@ -30,7 +28,6 @@ export class ShopifyStoreService {
       update: {
         name: input.name,
         email: input.email,
-        accessToken: input.accessToken,
         scope: input.scope,
         status: StoreStatus.ACTIVE,
         uninstalledAt: null,
@@ -44,7 +41,6 @@ export class ShopifyStoreService {
       data: {
         status: StoreStatus.UNINSTALLED,
         uninstalledAt: new Date(),
-        accessToken: null,
       },
     });
   }

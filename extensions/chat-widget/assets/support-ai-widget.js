@@ -27,6 +27,9 @@
   const messagesEl = document.createElement("div");
   messagesEl.className = "support-ai-messages";
 
+  const dynamicEl = document.createElement("div");
+  dynamicEl.className = "support-ai-dynamic";
+
   const form = document.createElement("form");
   form.className = "support-ai-form";
   const input = document.createElement("input");
@@ -42,9 +45,15 @@
 
   panel.appendChild(header);
   panel.appendChild(messagesEl);
+  panel.appendChild(dynamicEl);
   panel.appendChild(form);
   root.appendChild(panel);
   root.appendChild(bubble);
+
+  function clearDynamic() {
+    dynamicEl.innerHTML = "";
+    dynamicEl.className = "support-ai-dynamic";
+  }
 
   function appendMessage(text, role) {
     const el = document.createElement("div");
@@ -54,11 +63,121 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  async function apiPost(payload) {
+    if (!apiBase) {
+      throw new Error("API not configured");
+    }
+    const res = await fetch(apiBase + "/api/storefront/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Request failed");
+    }
+    return data;
+  }
+
+  function renderActions(actions) {
+    clearDynamic();
+    if (!actions) return;
+
+    if (actions.type === "order_lookup_form") {
+      dynamicEl.className = "support-ai-dynamic support-ai-form-block";
+      const wrap = document.createElement("form");
+      wrap.className = "support-ai-inline-form";
+      wrap.innerHTML =
+        '<label>Order number<input name="orderNumber" required placeholder="#1001" /></label>' +
+        '<label>Email<input name="email" type="email" required placeholder="you@email.com" /></label>' +
+        '<button type="submit">Track order</button>';
+      wrap.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const fd = new FormData(wrap);
+        const orderNumber = String(fd.get("orderNumber") || "").trim();
+        const email = String(fd.get("email") || "").trim();
+        if (!orderNumber || !email) return;
+        appendMessage("Track order " + orderNumber, "user");
+        clearDynamic();
+        try {
+          const data = await apiPost({
+            type: "order_lookup",
+            shopDomain: shop,
+            sessionId,
+            orderNumber,
+            email,
+          });
+          if (data.reply) appendMessage(data.reply, "bot");
+        } catch {
+          appendMessage(
+            "We could not find your order. Please check your details and try again.",
+            "bot",
+          );
+        }
+      });
+      dynamicEl.appendChild(wrap);
+    }
+
+    if (actions.type === "return_reasons" && actions.options) {
+      dynamicEl.className = "support-ai-dynamic support-ai-reasons";
+      const title = document.createElement("p");
+      title.className = "support-ai-reasons-title";
+      title.textContent = "Select a reason:";
+      dynamicEl.appendChild(title);
+      actions.options.forEach(function (opt) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "support-ai-reason-btn";
+        btn.textContent = opt.label;
+        btn.addEventListener("click", async function () {
+          appendMessage(opt.label, "user");
+          clearDynamic();
+          try {
+            const data = await apiPost({
+              type: "return_reason",
+              shopDomain: shop,
+              sessionId,
+              reasonCode: opt.code,
+            });
+            if (data.reply) appendMessage(data.reply, "bot");
+          } catch {
+            appendMessage(
+              "We could not save your return reason. Please try again.",
+              "bot",
+            );
+          }
+        });
+        dynamicEl.appendChild(btn);
+      });
+    }
+  }
+
+  async function sendMessage(content) {
+    appendMessage(content, "user");
+    input.value = "";
+    clearDynamic();
+    try {
+      const data = await apiPost({
+        type: "message",
+        shopDomain: shop,
+        sessionId,
+        content,
+      });
+      if (data.reply) appendMessage(data.reply, "bot");
+      renderActions(data.actions);
+    } catch {
+      appendMessage("Could not reach support. Try again later.", "bot");
+    }
+  }
+
   bubble.addEventListener("click", function () {
     panel.classList.toggle("support-ai-hidden");
     if (!panel.dataset.greeted) {
       panel.dataset.greeted = "1";
-      appendMessage("Hi! Ask about your order, returns, or sizing.", "bot");
+      appendMessage(
+        "Hi! Ask about your order (e.g. where is my order), returns, or sizing.",
+        "bot",
+      );
     }
   });
 
@@ -70,25 +189,6 @@
     }
     const content = input.value.trim();
     if (!content) return;
-    appendMessage(content, "user");
-    input.value = "";
-
-    try {
-      const res = await fetch(apiBase + "/api/storefront/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "message",
-          shopDomain: shop,
-          sessionId,
-          content,
-        }),
-      });
-      const data = await res.json();
-      if (data.reply) appendMessage(data.reply, "bot");
-      else appendMessage(data.error || "Something went wrong.", "bot");
-    } catch {
-      appendMessage("Could not reach support. Try again later.", "bot");
-    }
+    await sendMessage(content);
   });
 })();

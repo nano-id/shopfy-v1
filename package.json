@@ -12,6 +12,7 @@
     "setup": "prisma generate && prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "test": "vitest run --config test/vitest.config.ts",
     "test:watch": "vitest --config test/vitest.config.ts",

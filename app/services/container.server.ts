@@ -4,6 +4,7 @@ import {
   ReturnCollectionService,
 } from "@support/core";
 import { ShopifyOrderConnector } from "@support/shopify-connector";
+import { DbFirstOrderConnector } from "./db-order-connector.server";
 import prisma from "../db.server";
 import { PrismaAnalyticsRepository } from "./repositories/analytics.repository";
 import { PrismaConversationRepository } from "./repositories/conversation.repository";
@@ -26,9 +27,10 @@ export type AppContainer = {
 export function getContainer(): AppContainer {
   if (!container) {
     const storeRepo = new PrismaStoreRepository(prisma);
-    const orderConnector = new ShopifyOrderConnector({
+    const shopifyOrders = new ShopifyOrderConnector({
       getAdminClient: createAdminClientForStore,
     });
+    const orderConnector = new DbFirstOrderConnector(shopifyOrders);
 
     container = {
       storeRepo,

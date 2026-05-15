@@ -2,18 +2,24 @@ import type { ShopifyAdminClient } from "@support/shopify-connector";
 import prisma from "../db.server";
 import { sessionStorage } from "../shopify.server";
 
-/** Resolves Shopify Admin GraphQL client for a tenant store. */
+/** Resolves Shopify Admin GraphQL client by internal store id. */
 export async function createAdminClientForStore(
   storeId: string,
 ): Promise<ShopifyAdminClient | null> {
   const store = await prisma.store.findUnique({ where: { id: storeId } });
   if (!store || store.status !== "ACTIVE") return null;
+  return createAdminClientForShop(store.shopDomain);
+}
 
-  const sessions = await sessionStorage.findSessionsByShop(store.shopDomain);
+/** Tokens live in Shopify Session table only — never duplicated on Store. */
+export async function createAdminClientForShop(
+  shopDomain: string,
+): Promise<ShopifyAdminClient | null> {
+  const sessions = await sessionStorage.findSessionsByShop(shopDomain);
   const offline = sessions.find((s) => !s.isOnline) ?? sessions[0];
   if (!offline?.accessToken) return null;
 
-  const shop = store.shopDomain;
+  const shop = shopDomain;
   const accessToken = offline.accessToken;
   const apiVersion = "2025-10";
 

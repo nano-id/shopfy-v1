@@ -93,3 +93,59 @@
   border-radius: 6px;
   cursor: pointer;
 }
+
+.support-ai-dynamic {
+  padding: 0 12px 8px;
+}
+
+.support-ai-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.support-ai-inline-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #444;
+}
+
+.support-ai-inline-form input {
+  padding: 8px;
+  border: 1px solid #c9cccf;
+  border-radius: 6px;
+}
+
+.support-ai-inline-form button {
+  padding: 8px;
+  background: #008060;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.support-ai-reasons-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #444;
+}
+
+.support-ai-reason-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  text-align: left;
+  background: #f6f6f7;
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.support-ai-reason-btn:hover {
+  background: #ededed;
+}

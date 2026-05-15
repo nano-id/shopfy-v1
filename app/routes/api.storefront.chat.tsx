@@ -1,8 +1,17 @@
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { z } from "zod";
-import type { ReturnReasonCode } from "@support/core";
+import { RETURN_REASON_CODES } from "@support/core";
 import { handleChatRequest } from "~/services/chat.server";
+import {
+  corsPreflightResponse,
+  getStorefrontCorsHeaders,
+  jsonWithCors,
+} from "~/services/cors.server";
 import { checkRateLimit } from "~/services/rate-limit.server";
+
+const returnReasonSchema = z.enum(
+  RETURN_REASON_CODES as unknown as [string, ...string[]],
+);
 
 const messageSchema = z.discriminatedUnion("type", [
   z.object({
@@ -15,76 +24,81 @@ const messageSchema = z.discriminatedUnion("type", [
     type: z.literal("order_lookup"),
     shopDomain: z.string().min(3),
     sessionId: z.string().min(8),
-    orderNumber: z.string().min(1),
+    orderNumber: z.string().min(1).max(64),
     email: z.string().email(),
   }),
   z.object({
     type: z.literal("return_reason"),
     shopDomain: z.string().min(3),
     sessionId: z.string().min(8),
-    reasonCode: z.string(),
-    reasonNote: z.string().optional(),
+    reasonCode: returnReasonSchema,
+    reasonNote: z.string().max(2000).optional(),
     customerEmail: z.string().email().optional(),
   }),
 ]);
 
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method === "OPTIONS") {
+    return corsPreflightResponse(request);
+  }
+  return jsonWithCors(request, {
+    ok: true,
+    endpoint: "POST /api/storefront/chat",
+  });
+};
+
 export const action = async ({ request }: ActionFunctionArgs) => {
+  if (request.method === "OPTIONS") {
+    return corsPreflightResponse(request);
+  }
+
   if (request.method !== "POST") {
-    return Response.json({ error: "Method not allowed" }, { status: 405 });
+    return jsonWithCors(
+      request,
+      { error: "Method not allowed" },
+      { status: 405 },
+    );
   }
 
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const limited = checkRateLimit(`chat:${ip}`, { max: 60, windowMs: 60_000 });
   if (limited) {
-    return Response.json({ error: "Too many requests" }, { status: 429 });
+    return jsonWithCors(
+      request,
+      { error: "Too many requests. Please wait a moment." },
+      { status: 429 },
+    );
   }
 
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+    return jsonWithCors(request, { error: "Invalid JSON" }, { status: 400 });
   }
 
   const parsed = messageSchema.safeParse(body);
   if (!parsed.success) {
-    return Response.json(
+    return jsonWithCors(
+      request,
       { error: "Invalid payload", details: parsed.error.flatten() },
       { status: 400 },
     );
   }
 
-  const data = parsed.data;
-  if (data.type === "return_reason") {
-    return handleChatRequest({
-      ...data,
-      reasonCode: data.reasonCode as ReturnReasonCode,
-    });
-  }
-
-  return handleChatRequest(data);
+  const response = await handleChatRequest(parsed.data);
+  return withCorsFromResponse(request, response);
 };
 
-// CORS for storefront widget
-export const loader = async ({ request }: ActionFunctionArgs) => {
-  if (request.method === "OPTIONS") {
-    return corsPreflight();
+function withCorsFromResponse(request: Request, response: Response) {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(getStorefrontCorsHeaders(request))) {
+    headers.set(key, value);
   }
-  return Response.json({ ok: true, endpoint: "POST /api/storefront/chat" });
-};
-
-function corsPreflight() {
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders(),
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
-}
-
-function corsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
 }
