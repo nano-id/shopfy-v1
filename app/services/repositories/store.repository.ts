@@ -26,7 +26,6 @@ export class PrismaStoreRepository implements StoreRepository {
       data: {
         status: "UNINSTALLED",
         uninstalledAt: new Date(),
-        accessToken: null,
       },
     });
   }

@@ -1,7 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { z } from "zod";
-import { RETURN_REASON_CODES } from "@support/core";
-import { handleChatRequest } from "~/services/chat.server";
+import {
+  isReturnReasonCode,
+  RETURN_REASON_CODES,
+  type ReturnReasonCode,
+} from "@support/core";
+import { handleChatRequest, type ChatRequest } from "~/services/chat.server";
 import {
   corsPreflightResponse,
   getStorefrontCorsHeaders,
@@ -10,7 +14,7 @@ import {
 import { checkRateLimit } from "~/services/rate-limit.server";
 
 const returnReasonSchema = z.enum(
-  RETURN_REASON_CODES as unknown as [string, ...string[]],
+  RETURN_REASON_CODES as unknown as [ReturnReasonCode, ...ReturnReasonCode[]],
 );
 
 const messageSchema = z.discriminatedUnion("type", [
@@ -87,9 +91,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
   }
 
-  const response = await handleChatRequest(parsed.data);
+  const chatRequest = toChatRequest(parsed.data);
+  if (!chatRequest) {
+    return jsonWithCors(request, { error: "Invalid payload" }, { status: 400 });
+  }
+
+  const response = await handleChatRequest(chatRequest);
   return withCorsFromResponse(request, response);
 };
+
+function toChatRequest(
+  data: z.infer<typeof messageSchema>,
+): ChatRequest | null {
+  if (data.type === "return_reason" && !isReturnReasonCode(data.reasonCode)) {
+    return null;
+  }
+  return data as ChatRequest;
+}
 
 function withCorsFromResponse(request: Request, response: Response) {
   const headers = new Headers(response.headers);

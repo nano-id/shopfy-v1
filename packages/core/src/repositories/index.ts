@@ -4,4 +4,6 @@ export type {
   OrderRepository,
   ReturnRepository,
   AnalyticsRepository,
+  StoreRecord,
+  ConversationRecord,
 } from "./interfaces.js";

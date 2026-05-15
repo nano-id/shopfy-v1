@@ -4,7 +4,7 @@
  */
 export function getStorefrontCorsHeaders(request: Request): HeadersInit {
   const configured = process.env.STOREFRONT_CORS_ORIGINS?.split(",")
-    .map((o) => o.trim())
+    .map((o: string) => o.trim())
     .filter(Boolean);
 
   const origin = request.headers.get("Origin");
@@ -13,7 +13,7 @@ export function getStorefrontCorsHeaders(request: Request): HeadersInit {
   if (configured?.length && origin) {
     const shopDomain = origin.replace(/^https?:\/\//, "").split("/")[0];
     const allowed = configured.some(
-      (entry) =>
+      (entry: string) =>
         entry === origin ||
         entry === shopDomain ||
         shopDomain.endsWith(entry.replace(/^\*\./, "")),

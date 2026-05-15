@@ -42,7 +42,7 @@ export default function ReturnsPage() {
 
   const requestRows = returns.map((r) => [
     r.createdAt.toISOString().slice(0, 10),
-    RETURN_REASON_LABELS[r.reasonCode],
+    RETURN_REASON_LABELS[r.reasonCode as ReturnReasonCode],
     r.productTitle ?? "—",
     r.variantTitle ?? r.variant?.title ?? "—",
     r.customerEmail ?? "—",

@@ -93,6 +93,13 @@
         '<button type="submit">Track order</button>';
       wrap.addEventListener("submit", async function (e) {
         e.preventDefault();
+        if (!apiBase) {
+          appendMessage(
+            "Configure App API base URL in theme block settings.",
+            "bot",
+          );
+          return;
+        }
         const fd = new FormData(wrap);
         const orderNumber = String(fd.get("orderNumber") || "").trim();
         const email = String(fd.get("email") || "").trim();
@@ -110,7 +117,7 @@
           if (data.reply) appendMessage(data.reply, "bot");
         } catch {
           appendMessage(
-            "We could not find your order. Please check your details and try again.",
+            "We could not check your order right now. Please try again shortly.",
             "bot",
           );
         }
@@ -130,6 +137,13 @@
         btn.className = "support-ai-reason-btn";
         btn.textContent = opt.label;
         btn.addEventListener("click", async function () {
+          if (!apiBase) {
+            appendMessage(
+              "Configure App API base URL in theme block settings.",
+              "bot",
+            );
+            return;
+          }
           appendMessage(opt.label, "user");
           clearDynamic();
           try {

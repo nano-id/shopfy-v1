@@ -119,9 +119,8 @@ export default function SettingsPage() {
                 <Text as="p" tone="subdued">
                   Pull products, variants, orders, and fulfillments from Shopify.
                 </Text>
-                <Button submit name="intent" value="sync">
-                  Sync now
-                </Button>
+                <input type="hidden" name="intent" value="sync" />
+                <Button submit>Sync now</Button>
               </BlockStack>
             </Card>
           </Form>

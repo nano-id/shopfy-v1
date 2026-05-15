@@ -1,3 +1,4 @@
+import type { Fulfillment, Order } from "@prisma/client";
 import type {
   NormalizedFulfillment,
   NormalizedOrder,
@@ -5,6 +6,8 @@ import type {
 } from "@support/core";
 import type { OrderConnector } from "@support/core";
 import prisma from "~/db.server";
+
+type OrderWithFulfillments = Order & { fulfillments: Fulfillment[] };
 
 /** DB-first order lookup — falls back to platform connector when missing. */
 export class DbFirstOrderConnector implements OrderConnector {
@@ -31,7 +34,8 @@ export class DbFirstOrderConnector implements OrderConnector {
     });
 
     const match = orders.find(
-      (o) => o.email?.toLowerCase() === normalizedEmail,
+      (o: OrderWithFulfillments) =>
+        o.email?.toLowerCase() === normalizedEmail,
     );
 
     if (match) {
