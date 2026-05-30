@@ -1,5 +1,5 @@
 roles = ["frontend", "backend"]
 
 [commands]
-dev = "npm run dev"
+dev = "npx react-router dev"
 build = "npm run build"

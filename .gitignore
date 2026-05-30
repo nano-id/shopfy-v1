@@ -1,5 +1,6 @@
 # Tests & local-only tooling — never push
 test/
+scripts/
 
 node_modules/
 build/

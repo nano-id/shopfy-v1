@@ -1,7 +1,7 @@
 # Shopify Support AI — app configuration
 # https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = ""
+client_id = "2bdddf02063cbb1d867b31f8746b30e8"
 
 name = "Support AI"
 application_url = "https://example.com"

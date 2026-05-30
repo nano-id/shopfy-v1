@@ -7,12 +7,23 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
+// Shopify CLI 4.x exposes the tunnel URL via `HOST` env var (full URL).
+// `SHOPIFY_APP_URL` may be empty in dev; fall back to `HOST` so the library
+// can derive a valid app URL without crashing at boot.
+const rawHost = process.env.HOST || "";
+const hostUrl = rawHost
+  ? rawHost.startsWith("http")
+    ? rawHost
+    : `https://${rawHost}`
+  : "";
+const resolvedAppUrl = process.env.SHOPIFY_APP_URL || hostUrl || "";
+
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.October25,
   scopes: process.env.SCOPES?.split(","),
-  appUrl: process.env.SHOPIFY_APP_URL || "",
+  appUrl: resolvedAppUrl,
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,

@@ -3,6 +3,7 @@ api_version = "2025-10"
 name = "support-ai-chat"
 type = "theme"
 handle = "support-ai-chat"
+uid = "34d9c654-66f3-1373-4d8a-a3675ac02c53efbcc4ff"
 
 [capabilities]
 network_access = true
